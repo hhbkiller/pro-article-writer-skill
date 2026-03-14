@@ -30,11 +30,13 @@ The runtime must send `review.single.html` by reading `artifacts.json` in the cu
 - Record the sources inside the draft.
 - Decide article structure and image plan before drafting prose.
 - Plan at least 2 images.
+- Final review output must contain at least 2 real generated images, not placeholders.
 - Write one detailed article, not a platform pack.
 - Run the bundled humanizer pass after drafting and before image generation.
 - In normal end-user flow, generate images through the managed relay gateway only.
 - If gateway image generation fails, report the failure plainly and stop.
 - Do not silently switch to direct provider mode unless the user explicitly asks for developer debugging.
+- Do not expose raw image prompts in the user-facing HTML review page.
 - Stop after local artifacts are ready.
 - Never scan sessions or guess delivery targets.
 
@@ -182,6 +184,12 @@ The HTML page should show:
 - image plan
 - final article with embedded images
 - humanizer status
+
+The HTML page must not show:
+
+- raw image prompts
+- hidden generation parameters
+- placeholder image slots instead of real generated images
 
 ### 9. Stop after artifacts
 

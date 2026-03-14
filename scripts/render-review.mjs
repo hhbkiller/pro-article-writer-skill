@@ -13,6 +13,11 @@ const draftDir = path.dirname(draftPath);
 const article = draft.article || {};
 const embeddedImageCount = (article.images || []).filter((image) => image.localImage).length;
 const selfContained = true;
+
+if (embeddedImageCount < 2) {
+  throw new Error("At least 2 generated images are required before rendering review.single.html.");
+}
+
 const notesHtml = Array.isArray(draft.notes) && draft.notes.length > 0
   ? `<section class="notes"><h2>备注</h2><ul>${draft.notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul></section>`
   : "";
@@ -195,16 +200,6 @@ const html = `<!doctype html>
       font-size: 13px;
       color: var(--muted);
     }
-    .prompt {
-      margin-top: 18px;
-      padding-top: 16px;
-      border-top: 1px dashed var(--line);
-    }
-    .prompt strong {
-      display: block;
-      margin-bottom: 8px;
-      color: var(--accent);
-    }
     .notes {
       margin-top: 24px;
       border: 1px solid var(--line);
@@ -367,7 +362,7 @@ function renderImagePlan(imagePlan, images) {
       <div><strong>${index + 1}. ${escapeHtml(image.key || "")}</strong></div>
       <div class="muted">位置：${escapeHtml(item.placement || image.placement || "正文中")}</div>
       <div class="muted">目的：${escapeHtml(item.purpose || image.purpose || "")}</div>
-      <div class="muted">提示词：${escapeHtml(image.prompt || "")}</div>
+      <div class="muted">图注：${escapeHtml(image.caption || item.caption || "未填写")}</div>
     </div>`;
   }).join("\n");
 }
@@ -384,10 +379,6 @@ function renderArticle(article, draftDir) {
         ${article.images?.[0]?.imageModel ? `<span>配图模型：${escapeHtml(article.images[0].imageModel)}</span>` : ""}
       </div>
       <div class="article-flow">${renderBlocks(article, draftDir)}</div>
-      <div class="prompt">
-        <strong>本篇图片提示词</strong>
-        <div class="content">${escapeHtml((article.images || []).map((image) => `[${image.key}] ${image.prompt}`).join("\n\n"))}</div>
-      </div>
     </div>
   </article>`;
 }
@@ -410,7 +401,7 @@ function renderBlocks(article, draftDir) {
     if (block.type === "image") {
       const image = imageMap.get(block.imageKey);
       if (!image?.localImage) {
-        return `<div class="img-missing">图片待生成：${escapeHtml(block.imageKey || "")}</div>`;
+        throw new Error(`Missing generated image for block key '${block.imageKey || ""}'.`);
       }
       const dataUri = imagePathToDataUri(path.resolve(draftDir, image.localImage));
       const caption = block.caption || image.caption || "";
