@@ -36,14 +36,14 @@ writeJson(draftPath, draft);
 console.log(JSON.stringify({
   draftPath,
   imagesDir,
-  posts: draft.posts.map((post) => ({
-    platform: post.platform,
-    images: post.images.map((image) => ({
+  article: {
+    title: draft.article?.title || "",
+    images: (draft.article?.images || []).map((image) => ({
       key: image.key,
       localImage: image.localImage,
       imageModel: image.imageModel
     }))
-  }))
+  }
 }, null, 2));
 
 async function generateImagesDirect() {
@@ -54,41 +54,37 @@ async function generateImagesDirect() {
     apiKey: args["api-key"]
   });
 
-  for (const [postIndex, post] of draft.posts.entries()) {
-    for (const [imageIndex, imageSpec] of post.images.entries()) {
-      const requestBody = {
-        model,
-        prompt: imageSpec.prompt
-      };
+  for (const [imageIndex, imageSpec] of (draft.article?.images || []).entries()) {
+    const requestBody = {
+      model,
+      prompt: imageSpec.prompt
+    };
 
-      if (args.size) {
-        requestBody.size = args.size;
-      }
-
-      const result = await fetchJson(`${baseUrl}/images/generations`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify(requestBody)
-      });
-
-      const image = result.data?.[0];
-      if (!image?.url) {
-        throw new Error(`No image URL returned for posts[${postIndex}].images[${imageIndex}]`);
-      }
-
-      await downloadAndAttachImage({
-        postIndex,
-        imageIndex,
-        post,
-        imageSpec,
-        imageUrl: image.url,
-        imageModel: result.model || model,
-        imageSize: image.size || args.size || null
-      });
+    if (args.size) {
+      requestBody.size = args.size;
     }
+
+    const result = await fetchJson(`${baseUrl}/images/generations`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    const image = result.data?.[0];
+    if (!image?.url) {
+      throw new Error(`No image URL returned for article.images[${imageIndex}]`);
+    }
+
+    await downloadAndAttachImage({
+      imageIndex,
+      imageSpec,
+      imageUrl: image.url,
+      imageModel: result.model || model,
+      imageSize: image.size || args.size || null
+    });
   }
 }
 
@@ -100,17 +96,13 @@ async function generateImagesViaGateway() {
   });
   const items = [];
 
-  for (const [postIndex, post] of draft.posts.entries()) {
-    for (const [imageIndex, imageSpec] of post.images.entries()) {
-      items.push({
-        post_index: postIndex,
-        image_index: imageIndex,
-        platform: post.platform,
-        key: imageSpec.key,
-        prompt: imageSpec.prompt,
-        size: args.size || null
-      });
-    }
+  for (const [imageIndex, imageSpec] of (draft.article?.images || []).entries()) {
+    items.push({
+      article_image_index: imageIndex,
+      key: imageSpec.key,
+      prompt: imageSpec.prompt,
+      size: args.size || null
+    });
   }
 
   const result = await fetchJson(`${gatewayBaseUrl}/relay/images/generations`, {
@@ -133,16 +125,13 @@ async function generateImagesViaGateway() {
   }
 
   for (const item of result.items) {
-    const post = draft.posts[item.post_index];
-    const imageSpec = post?.images?.[item.image_index];
-    if (!post || !imageSpec || !item.url) {
+    const imageSpec = draft.article?.images?.[item.article_image_index];
+    if (!imageSpec || !item.url) {
       throw new Error("Gateway image generation returned invalid item mapping.");
     }
 
     await downloadAndAttachImage({
-      postIndex: item.post_index,
-      imageIndex: item.image_index,
-      post,
+      imageIndex: item.article_image_index,
       imageSpec,
       imageUrl: item.url,
       imageModel: item.model || result.model || model,
@@ -151,16 +140,16 @@ async function generateImagesViaGateway() {
   }
 }
 
-async function downloadAndAttachImage({ postIndex, imageIndex, post, imageSpec, imageUrl, imageModel, imageSize }) {
+async function downloadAndAttachImage({ imageIndex, imageSpec, imageUrl, imageModel, imageSize }) {
   const imageResponse = await fetch(imageUrl);
   if (!imageResponse.ok) {
-    throw new Error(`Failed to download generated image for posts[${postIndex}].images[${imageIndex}]`);
+    throw new Error(`Failed to download generated image for article.images[${imageIndex}]`);
   }
 
   const arrayBuffer = await imageResponse.arrayBuffer();
   const extension = inferExt(imageResponse.headers.get("content-type"));
   const safeKey = String(imageSpec.key || `image-${imageIndex + 1}`).replace(/[^a-zA-Z0-9_-]+/g, "-");
-  const fileName = `${String(postIndex + 1).padStart(2, "0")}-${post.platform}-${safeKey}${extension}`;
+  const fileName = `${String(imageIndex + 1).padStart(2, "0")}-${safeKey}${extension}`;
   const filePath = path.join(imagesDir, fileName);
   fs.writeFileSync(filePath, Buffer.from(arrayBuffer));
 

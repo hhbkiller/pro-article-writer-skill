@@ -5,11 +5,9 @@ import { ensureDir, nowStamp, parseArgs, slugify, writeJson, writeText } from ".
 
 const args = parseArgs(process.argv.slice(2));
 const root = path.resolve(args.root || "./jobs");
-const theme = args.theme || "untitled-campaign";
-const platforms = String(args.platforms || "toutiao,xiaohongshu,x")
-  .split(",")
-  .map((item) => item.trim())
-  .filter(Boolean);
+const theme = args.theme || "untitled-article";
+const direction = args.direction || "";
+const brief = args.brief || "";
 
 const jobId = `${nowStamp()}-${slugify(theme)}`;
 const jobDir = path.join(root, jobId);
@@ -23,22 +21,47 @@ ensureDir(imagesDir);
 const draft = {
   jobId,
   theme,
+  direction,
+  brief,
   createdAt: new Date().toISOString(),
-  status: "draft",
+  status: "research",
   approval: {
     status: "pending",
     approvedBy: null,
     approvedAt: null,
     note: null
   },
-  posts: platforms.map((platform) => ({
-    platform,
+  research: {
+    userIntent: {
+      topic: theme,
+      direction,
+      brief
+    },
+    searchQueries: [],
+    sources: [],
+    findings: []
+  },
+  plan: {
+    angle: "",
+    audience: "",
+    promise: "",
+    sections: [],
+    imagePlan: []
+  },
+  article: {
     title: "",
-    publishTime: "",
-    goal: "",
+    subtitle: "",
+    summary: "",
     blocks: [],
-    images: []
-  })),
+    images: [],
+    humanizer: {
+      required: true,
+      source: "bundled-humanizer",
+      status: "pending",
+      appliedAt: null,
+      notes: []
+    }
+  },
   notes: []
 };
 

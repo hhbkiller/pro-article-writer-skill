@@ -10,10 +10,8 @@ const draft = normalizeDraft(readJson(draftPath));
 const outPath = path.resolve(args.out || path.join(path.dirname(draftPath), "review.single.html"));
 const artifactManifestPath = path.resolve(args["artifacts-out"] || path.join(path.dirname(outPath), "artifacts.json"));
 const draftDir = path.dirname(draftPath);
-const postsHtml = (draft.posts || []).map((post) => renderPost(post, draftDir)).join("\n");
-const embeddedImageCount = (draft.posts || []).reduce((count, post) => {
-  return count + (post.images || []).filter((image) => image.localImage).length;
-}, 0);
+const article = draft.article || {};
+const embeddedImageCount = (article.images || []).filter((image) => image.localImage).length;
 const selfContained = true;
 const notesHtml = Array.isArray(draft.notes) && draft.notes.length > 0
   ? `<section class="notes"><h2>备注</h2><ul>${draft.notes.map((note) => `<li>${escapeHtml(note)}</li>`).join("")}</ul></section>`
@@ -24,7 +22,7 @@ const html = `<!doctype html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>${escapeHtml(draft.theme)} - 审核页</title>
+  <title>${escapeHtml(article.title || draft.theme)} - 审核页</title>
   <style>
     :root {
       --bg: #f4efe7;
@@ -85,6 +83,12 @@ const html = `<!doctype html>
       border-radius: 999px;
       background: rgba(255,255,255,0.72);
     }
+    .grid {
+      display: grid;
+      gap: 18px;
+      grid-template-columns: 1.1fr 0.9fr;
+      margin-top: 24px;
+    }
     .stack {
       display: grid;
       gap: 18px;
@@ -97,24 +101,10 @@ const html = `<!doctype html>
       overflow: hidden;
       box-shadow: 0 24px 40px rgba(44, 33, 19, 0.08);
     }
-    .article-flow img, .img-missing {
-      display: block;
-      width: 100%;
-      border-radius: 18px;
-      object-fit: cover;
-      background: linear-gradient(135deg, rgba(214,96,43,0.15), rgba(20,95,99,0.16));
-    }
-    .img-missing {
-      display: grid;
-      place-items: center;
-      color: var(--muted);
-      font-size: 14px;
-      min-height: 240px;
-    }
     .body {
       padding: 20px;
     }
-    .platform {
+    .kicker {
       display: inline-block;
       padding: 6px 10px;
       border-radius: 999px;
@@ -136,9 +126,10 @@ const html = `<!doctype html>
       font-size: 14px;
       color: var(--muted);
     }
-    .content {
-      font-size: 15px;
-      line-height: 1.85;
+    .content, .muted {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.8;
       white-space: pre-wrap;
     }
     .article-flow {
@@ -165,6 +156,35 @@ const html = `<!doctype html>
     .article-flow ul {
       margin: 0;
       padding-left: 20px;
+    }
+    .source-list, .plan-list {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+    .source-item, .plan-item {
+      padding: 14px 16px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: rgba(255,255,255,0.70);
+    }
+    .source-item a {
+      color: var(--accent-2);
+      text-decoration: none;
+    }
+    .article-flow img, .img-missing {
+      display: block;
+      width: 100%;
+      border-radius: 18px;
+      object-fit: cover;
+      background: linear-gradient(135deg, rgba(214,96,43,0.15), rgba(20,95,99,0.16));
+    }
+    .img-missing {
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 14px;
+      min-height: 240px;
     }
     figure {
       margin: 0;
@@ -200,6 +220,7 @@ const html = `<!doctype html>
     @media (max-width: 980px) {
       .page { width: min(100vw - 20px, 1200px); }
       .hero { padding: 22px; }
+      .grid { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -207,20 +228,63 @@ const html = `<!doctype html>
   <main class="page">
     <section class="hero">
       <span class="eyebrow">REVIEW ONLY</span>
-      <h1>${escapeHtml(draft.theme)} 三平台待审核文章页</h1>
+      <h1>${escapeHtml(article.title || draft.theme)} 图文审核页</h1>
       <div class="meta">
         <span class="chip">Job ID: ${escapeHtml(draft.jobId || "")}</span>
         <span class="chip">当前状态: ${escapeHtml(draft.status || "draft")}</span>
         <span class="chip">审核状态: ${escapeHtml(draft.approval?.status || "pending")}</span>
+        <span class="chip">Humanizer: ${escapeHtml(article.humanizer?.status || "pending")}</span>
+        <span class="chip">已规划配图: ${escapeHtml(String((article.images || []).length))}</span>
       </div>
       <div class="rules">
         <span class="chip">规则 1：未明确批准前，不得发布</span>
-        <span class="chip">规则 2：只生成头条 / 小红书 / X 三个平台内容</span>
-        <span class="chip">规则 3：图片与正文一并审核</span>
+        <span class="chip">规则 2：先调研、后定结构、再写正文</span>
+        <span class="chip">规则 3：正文必须先经 humanizer，再生成配图与 HTML</span>
       </div>
     </section>
+    <section class="grid">
+      <article class="card">
+        <div class="body">
+          <span class="kicker">用户输入</span>
+          <h2>${escapeHtml(draft.theme || "")}</h2>
+          <div class="muted">方向：${escapeHtml(draft.research?.userIntent?.direction || draft.direction || "未填写")}</div>
+          <div class="muted">简要思路：${escapeHtml(draft.research?.userIntent?.brief || draft.brief || "未填写")}</div>
+          <div class="muted">文章角度：${escapeHtml(draft.plan?.angle || "未填写")}</div>
+          <div class="muted">目标读者：${escapeHtml(draft.plan?.audience || "未填写")}</div>
+          <div class="muted">文章承诺：${escapeHtml(draft.plan?.promise || "未填写")}</div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="body">
+          <span class="kicker">调研摘要</span>
+          <h2>已收集 ${escapeHtml(String((draft.research?.sources || []).length))} 个来源</h2>
+          <div class="content">${escapeHtml((draft.research?.findings || []).join("\n\n"))}</div>
+        </div>
+      </article>
+    </section>
     <section class="stack">
-      ${postsHtml}
+      <article class="card">
+        <div class="body">
+          <span class="kicker">资料来源</span>
+          <h2>检索与参考</h2>
+          <div class="source-list">${renderSources(draft.research?.sources || [])}</div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="body">
+          <span class="kicker">文章结构</span>
+          <h2>段落与叙事安排</h2>
+          <div class="plan-list">${renderSections(draft.plan?.sections || [])}</div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="body">
+          <span class="kicker">配图规划</span>
+          <h2>至少两幅图，服务正文推进</h2>
+          <div class="plan-list">${renderImagePlan(draft.plan?.imagePlan || [], article.images || [])}</div>
+        </div>
+      </article>
+      ${renderArticle(article, draftDir)}
     </section>
     ${notesHtml}
   </main>
@@ -267,42 +331,70 @@ function buildArtifactManifest() {
   };
 }
 
-function labelPlatform(platform) {
-  switch (platform) {
-    case "toutiao":
-      return "今日头条";
-    case "xiaohongshu":
-      return "小红书";
-    case "x":
-      return "X";
-    default:
-      return platform;
+function renderSources(sources) {
+  if (sources.length === 0) {
+    return `<div class="source-item">暂无来源</div>`;
   }
+  return sources.map((source) => `<div class="source-item">
+    <div><strong>${escapeHtml(source.title || "")}</strong></div>
+    <div class="muted">${escapeHtml(source.publishedAt || "日期未记录")}</div>
+    <div class="muted">${escapeHtml(source.note || "")}</div>
+    ${source.url ? `<div class="muted"><a href="${escapeAttr(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.url)}</a></div>` : ""}
+  </div>`).join("\n");
 }
 
-function renderPost(post, draftDir) {
-  const articleFlow = renderBlocks(post, draftDir);
+function renderSections(sections) {
+  if (sections.length === 0) {
+    return `<div class="plan-item">暂无结构</div>`;
+  }
+  return sections.map((section, index) => `<div class="plan-item">
+    <div><strong>${index + 1}. ${escapeHtml(section.heading || "")}</strong></div>
+    <div class="muted">${escapeHtml(section.purpose || "")}</div>
+    ${Array.isArray(section.keyPoints) && section.keyPoints.length > 0
+      ? `<ul>${section.keyPoints.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+      : ""}
+  </div>`).join("\n");
+}
+
+function renderImagePlan(imagePlan, images) {
+  if (imagePlan.length === 0 && images.length === 0) {
+    return `<div class="plan-item">暂无配图规划</div>`;
+  }
+  const imageMap = new Map(images.map((image) => [image.key, image]));
+  return (imagePlan.length > 0 ? imagePlan : images).map((item, index) => {
+    const image = imageMap.get(item.key) || item;
+    return `<div class="plan-item">
+      <div><strong>${index + 1}. ${escapeHtml(image.key || "")}</strong></div>
+      <div class="muted">位置：${escapeHtml(item.placement || image.placement || "正文中")}</div>
+      <div class="muted">目的：${escapeHtml(item.purpose || image.purpose || "")}</div>
+      <div class="muted">提示词：${escapeHtml(image.prompt || "")}</div>
+    </div>`;
+  }).join("\n");
+}
+
+function renderArticle(article, draftDir) {
   return `<article class="card">
     <div class="body">
-      <span class="platform">${escapeHtml(labelPlatform(post.platform))}</span>
-      <h2>${escapeHtml(post.title || "")}</h2>
+      <span class="kicker">正文成稿</span>
+      <h2>${escapeHtml(article.title || "")}</h2>
       <div class="post-meta">
-        <span>建议发布时间：${escapeHtml(post.publishTime || "")}</span>
-        <span>内容目标：${escapeHtml(post.goal || "")}</span>
-        ${post.images?.[0]?.imageModel ? `<span>配图模型：${escapeHtml(post.images[0].imageModel)}</span>` : ""}
+        <span>副标题：${escapeHtml(article.subtitle || "无")}</span>
+        <span>摘要：${escapeHtml(article.summary || "")}</span>
+        <span>Humanizer 来源：${escapeHtml(article.humanizer?.source || "bundled-humanizer")}</span>
+        ${article.images?.[0]?.imageModel ? `<span>配图模型：${escapeHtml(article.images[0].imageModel)}</span>` : ""}
       </div>
-      <div class="article-flow">${articleFlow}</div>
+      <div class="article-flow">${renderBlocks(article, draftDir)}</div>
       <div class="prompt">
         <strong>本篇图片提示词</strong>
-        <div class="content">${escapeHtml((post.images || []).map((image) => `[${image.key}] ${image.prompt}`).join("\n\n"))}</div>
+        <div class="content">${escapeHtml((article.images || []).map((image) => `[${image.key}] ${image.prompt}`).join("\n\n"))}</div>
       </div>
     </div>
   </article>`;
 }
 
-function renderBlocks(post, draftDir) {
-  const imageMap = new Map((post.images || []).map((image) => [image.key, image]));
-  return (post.blocks || []).map((block) => {
+function renderBlocks(article, draftDir) {
+  const imageMap = new Map((article.images || []).map((image) => [image.key, image]));
+  return (article.blocks || []).map((block) => {
     if (block.type === "paragraph") {
       return `<p>${escapeHtml(block.text || "")}</p>`;
     }
@@ -322,7 +414,7 @@ function renderBlocks(post, draftDir) {
       }
       const dataUri = imagePathToDataUri(path.resolve(draftDir, image.localImage));
       const caption = block.caption || image.caption || "";
-      const alt = image.alt || post.title || labelPlatform(post.platform);
+      const alt = image.alt || article.title || "article image";
       return `<figure><img src="${escapeAttr(dataUri)}" alt="${escapeAttr(alt)}">${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ""}</figure>`;
     }
     return "";
@@ -340,4 +432,3 @@ function escapeHtml(value) {
 function escapeAttr(value) {
   return escapeHtml(value).replaceAll("'", "&#39;");
 }
-

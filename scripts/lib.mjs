@@ -73,10 +73,116 @@ export function resolveDraftPath(inputPath) {
 }
 
 export function normalizeDraft(draft) {
+  const legacyPost = Array.isArray(draft.posts) && draft.posts.length > 0 ? normalizePost(draft.posts[0]) : null;
+  const research = normalizeResearch(draft.research, draft);
+  const plan = normalizePlan(draft.plan, legacyPost);
+  const article = normalizeArticle(draft.article, { ...draft, plan }, legacyPost);
   const next = {
     ...draft,
+    research,
+    plan,
+    article,
     posts: Array.isArray(draft.posts) ? draft.posts.map(normalizePost) : []
   };
+  return next;
+}
+
+function normalizeResearch(research, draft) {
+  const next = research && typeof research === "object" ? { ...research } : {};
+  next.userIntent = {
+    topic: next.userIntent?.topic || draft.theme || "",
+    direction: next.userIntent?.direction || draft.direction || "",
+    brief: next.userIntent?.brief || draft.brief || ""
+  };
+  next.searchQueries = Array.isArray(next.searchQueries) ? [...next.searchQueries] : [];
+  next.sources = Array.isArray(next.sources) ? next.sources.map((source) => ({ ...source })) : [];
+  next.findings = Array.isArray(next.findings) ? [...next.findings] : [];
+  return next;
+}
+
+function normalizePlan(plan, legacyPost) {
+  const next = plan && typeof plan === "object" ? { ...plan } : {};
+  next.angle = next.angle || "";
+  next.audience = next.audience || "";
+  next.promise = next.promise || "";
+  next.sections = Array.isArray(next.sections) ? next.sections.map((section) => ({
+    ...section,
+    keyPoints: Array.isArray(section.keyPoints) ? [...section.keyPoints] : []
+  })) : [];
+  next.imagePlan = Array.isArray(next.imagePlan)
+    ? next.imagePlan.map((item) => ({ ...item }))
+    : legacyPost?.images?.map((image, index) => ({
+      key: image.key || `image-${index + 1}`,
+      placement: index === 0 ? "opening" : "middle",
+      purpose: "",
+      prompt: image.prompt || "",
+      alt: image.alt || "",
+      caption: image.caption || ""
+    })) || [];
+  return next;
+}
+
+function normalizeArticle(article, draft, legacyPost) {
+  const next = article && typeof article === "object" ? { ...article } : {};
+  const base = legacyPost || {};
+  next.title = next.title || base.title || "";
+  next.subtitle = next.subtitle || "";
+  next.summary = next.summary || "";
+  next.images = Array.isArray(next.images) ? next.images.map((image) => ({ ...image })) : [];
+  next.blocks = Array.isArray(next.blocks) ? next.blocks.map((block) => normalizeBlock(block)) : [];
+  next.humanizer = {
+    required: next.humanizer?.required !== false,
+    source: next.humanizer?.source || "bundled-humanizer",
+    status: next.humanizer?.status || "pending",
+    appliedAt: next.humanizer?.appliedAt || null,
+    notes: Array.isArray(next.humanizer?.notes) ? [...next.humanizer.notes] : []
+  };
+
+  if (next.images.length === 0 && base.images?.length) {
+    next.images = base.images.map((image) => ({ ...image }));
+  }
+
+  if (next.images.length === 0 && draft.plan?.imagePlan?.length) {
+    next.images = draft.plan.imagePlan.map((image) => ({
+      key: image.key,
+      prompt: image.prompt || "",
+      alt: image.alt || next.title || "article image",
+      caption: image.caption || "",
+      placement: image.placement || "",
+      purpose: image.purpose || ""
+    }));
+  }
+
+  if (next.blocks.length === 0 && base.blocks?.length) {
+    next.blocks = base.blocks.map((block) => normalizeBlock(block));
+  }
+
+  if (next.images.length === 0 && next.imagePrompt) {
+    next.images.push({
+      key: "main-1",
+      prompt: next.imagePrompt,
+      alt: next.title || "preview image",
+      caption: "",
+      localImage: next.localImage || null,
+      imageUrl: next.imageUrl || null,
+      imageModel: next.imageModel || null,
+      imageGeneratedAt: next.imageGeneratedAt || null,
+      imageSize: next.imageSize || null
+    });
+  }
+
+  if (next.blocks.length === 0) {
+    if (next.images.length > 0) {
+      const firstKey = next.images[0].key || "main-1";
+      next.blocks.push({ type: "image", imageKey: firstKey, caption: next.images[0]?.caption || "" });
+    }
+    if (base.content) {
+      for (const paragraph of splitParagraphs(base.content)) {
+        next.blocks.push({ type: "paragraph", text: paragraph });
+      }
+    }
+  }
+
   return next;
 }
 

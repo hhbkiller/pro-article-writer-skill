@@ -1,7 +1,7 @@
 interface:
-  display_name: "Social Content Pipeline"
-  short_description: "多平台选题、成稿、配图与审核包生成，严格先审后发"
-  default_prompt: "Use $social-content-pipeline to create a fresh review-first content package for Toutiao, Xiaohongshu, and X, then emit review.single.html plus artifacts.json for the runtime to deliver."
+  display_name: "Professional Article Writer"
+  short_description: "调研优先、单篇深写、humanizer 人类化、至少两图、输出 HTML 审核页"
+  default_prompt: "Use $social-content-pipeline to turn the user's topic, direction, and rough idea into one deeply researched, humanized illustrated article. Search first, record sources and an outline, plan at least 2 images, write the article, apply the bundled humanizer pass, generate images, then emit review.single.html plus artifacts.json for runtime delivery."
 
 policy:
   allow_implicit_invocation: true

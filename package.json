@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "description": "Review-first content pipeline skill utilities with runtime-owned artifact delivery",
+  "description": "Research-first professional illustrated article writer with bundled humanizer guidance and runtime-owned HTML artifact delivery",
   "engines": {
     "node": ">=18"
   },

@@ -1,108 +1,56 @@
 ---
 name: social-content-pipeline
-description: Prepare review-first HTML article preview pages for Toutiao, Xiaohongshu, and X. Use when the user asks to pick topics, write platform-specific posts, generate article images, assemble a single HTML review page before any publishing, or uses phrases like 生成图文 / 写一篇软文.
+description: Research-first professional illustrated article writer that turns a user's topic, direction, and rough idea into one deep, detailed, human-sounding article with at least two generated images and a review-first HTML package. Use when the user asks for 生成图文, 图文内容, 配图文章, 写一篇软文, 写软文, 深度推文, or wants one high-quality article instead of multi-platform variants.
 ---
 
 # Social Content Pipeline
 
-This skill is for content production, not blind auto-posting.
+Write one strong illustrated article.
 
-It handles:
+Do not generate three platform versions.
+Do not optimize for Toutiao, Xiaohongshu, and X separately.
+Article quality is the product.
 
-- topic selection
-- per-platform draft writing
-- image prompt generation
-- HuoShan Seedream image generation
-- HTML review page assembly
-- explicit approval state tracking
+This skill owns:
 
-It does not publish anything by default.
+- research
+- structure planning
+- single-article writing
+- bundled humanizer pass
+- image prompt planning and image generation
+- HTML review artifact generation
 
-## Core Rule
+This skill does not own remote delivery.
+The runtime must send `review.single.html` by reading `artifacts.json` in the current request context only.
 
-Human approval is mandatory before publishing.
+## Hard Rules
 
-If the user has not explicitly approved the draft package, stop at the review stage.
+- Start from the user's topic, direction, and brief idea.
+- Search for relevant articles, current information, and useful source material before outlining.
+- Record the sources inside the draft.
+- Decide article structure and image plan before drafting prose.
+- Plan at least 2 images.
+- Write one detailed article, not a platform pack.
+- Run the bundled humanizer pass after drafting and before image generation.
+- Stop after local artifacts are ready.
+- Never scan sessions or guess delivery targets.
 
-Every time the user asks to generate a new review package, create a fresh job with `scripts/init-job.mjs`.
-Do not reuse an old job directory unless the user explicitly asks to continue that exact job.
+If the user only says `生成图文`, `图文内容`, `写软文`, or similar, do not answer inline with finished prose.
+Generate the review package instead.
 
-When review output is ready, the skill must stop after generating local artifacts.
-Attachment delivery is owned by the runtime or host application, not by this skill.
+## Read These Files
 
-The skill must produce:
+- Read [references/draft-schema.md](./references/draft-schema.md) when filling or checking `draft.json`.
+- Read [references/humanizer.md](./references/humanizer.md) before the final rewrite pass.
 
-- `jobs/<job-id>/review.single.html`
-- `jobs/<job-id>/artifacts.json`
+`references/humanizer.md` is bundled from the public `humanizer` skill on OpenClawHub so this writer skill can work without a separate install.
 
-`artifacts.json` is the handoff contract for the runtime.
-The runtime must read that file and send the HTML attachment back to the current request conversation.
+## Workflow
 
-The skill must not:
-
-- call `openclaw message send`
-- guess delivery targets from sessions
-- scan historical sessions
-- send Telegram / Feishu / Slack / Discord / WhatsApp attachments by itself
-
-After artifacts are ready, do not paste the article inline.
-If the runtime still expects text, reply only with a short status line that the review package is ready.
-
-Do not convert paths to Windows-only host paths.
-Do not use hard-coded directories or static job ids.
-
-## Mandatory Triggers
-
-The following phrases are hard triggers for this skill and must not be answered with inline article text:
-
-- `生成图文`
-- `写一篇软文`
-- `写软文`
-- `图文内容`
-- `配图软文`
-
-If the user message contains any of the phrases above, or asks for article generation plus images, you must invoke this skill immediately.
-
-Before doing anything else for these trigger phrases, re-read this SKILL.md in the current turn even if you believe you already know the workflow from earlier messages in the same session.
-
-If the user does not specify a platform and only asks for a soft article or image-text article package, default to generating the standard 3-platform review package for:
-
-- Toutiao
-- Xiaohongshu
-- X
-
-The final output for these trigger phrases must be a review-first HTML package.
-Do not reply with正文成稿 first.
-Do not skip HTML assembly.
-Do not skip artifact manifest generation.
-
-If the trigger phrase is `生成图文`, `图文内容`, or `配图软文`, image generation is mandatory.
-For those requests, you must run `scripts/generate-images.mjs` before `scripts/render-review.mjs`.
-If image generation does not complete successfully, do not emit the HTML review package. Report image-generation failure plainly and stop.
-
-
-## Runtime Handoff Safety
-
-In Telegram, Feishu, QQ, Slack, Discord, WhatsApp, or any other remote chat channel:
-
-- do not return `file://` links
-- do not return `\\wsl.localhost\...` paths
-- do not return local filesystem paths as the primary review method
-- do not ask the user to open a local path unless the user explicitly asked for the local file path
-
-For remote-chat users, the runtime must send the HTML attachment by consuming `artifacts.json`.
-
-This skill must only hand off artifact metadata. It must not perform remote attachment delivery itself.
-
-If a host runtime cannot consume `artifacts.json` yet, that is a runtime integration gap, not a reason for the skill to guess or reuse old delivery contexts.
-## Recommended Workflow
-
-### 1. Create a draft job
-
-Initialize a new job folder:
+### 1. Create a fresh job
 
 ```bash
-node scripts/init-job.mjs --root ./jobs --theme "AI 自动化" --platforms toutiao,xiaohongshu,x
+node scripts/init-job.mjs --root ./jobs --theme "OpenClaw 风险通报" --direction "科技安全" --brief "写成有判断、有细节的深度图文"
 ```
 
 This creates:
@@ -112,72 +60,88 @@ This creates:
 - `jobs/<job-id>/artifacts.json`
 - `jobs/<job-id>/images/`
 
-### 2. Fill `draft.json`
+### 2. Research first
 
-Write platform-specific publish structures into `draft.json`.
+Before writing:
 
-Required shape:
+- capture the user's topic, direction, and brief in `research.userIntent`
+- search the web for relevant articles, reports, posts, and primary material
+- prefer recent or primary sources when the topic is time-sensitive
+- record exact URLs, dates, and what each source contributes
+- summarize findings into concrete takeaways instead of vague impressions
 
-```json
-{
-  "jobId": "20260313-081500-ai-automation",
-  "theme": "AI 自动化",
-  "status": "draft",
-  "approval": {
-    "status": "pending",
-    "approvedBy": null,
-    "approvedAt": null,
-    "note": null
-  },
-  "posts": [
-    {
-      "platform": "toutiao",
-      "title": "标题",
-      "publishTime": "2026-03-13 08:30",
-      "goal": "阅读量",
-      "blocks": [
-        { "type": "paragraph", "text": "开场段落" },
-        { "type": "image", "imageKey": "main-1", "caption": "图注" },
-        { "type": "heading", "text": "小标题" },
-        { "type": "paragraph", "text": "正文段落" },
-        { "type": "list", "items": ["要点1", "要点2"] }
-      ],
-      "images": [
-        {
-          "key": "main-1",
-          "prompt": "配图提示词",
-          "alt": "图片替代文本",
-          "caption": "图注"
-        }
-      ]
-    }
-  ]
-}
-```
+Minimum research bar:
 
-Rules:
+- at least 2 sources
+- at least 1 concrete search query
+- at least 1 findings summary entry
 
-- `posts` must stay platform-specific
-- do not reuse the exact same copy across platforms
-- every post should have at least one `image`
-- images must be referenced from `blocks`
-- the final reading order must come from `blocks`, not from a single flat `content` field
-- only generate 3 platform articles: Toutiao, Xiaohongshu, and X
-- include each of those 3 platforms exactly once
-- do not generate X reply drafts in this skill
-- never store API keys inside the draft file
+### 3. Plan the article
 
-### 3. Validate the draft
+Before drafting paragraphs:
+
+- define the angle
+- define the audience
+- define the article promise
+- map section-by-section structure
+- plan image placement and purpose
+
+Do not decide images after the article is already done.
+The image plan must support the reading flow.
+
+### 4. Draft one article
+
+Write a single article into `article`.
+
+Quality bar:
+
+- have a clear point of view
+- include specific details, not generic claims
+- use concrete facts from the research
+- show tension, tradeoffs, or stakes where relevant
+- avoid shallow overview writing
+- make each section earn its place
+
+Use `article.blocks` as the final reading order.
+Use `article.images` for the real image specs that will be generated.
+There must be at least 2 images and at least 2 image blocks.
+
+### 5. Run the bundled humanizer pass
+
+After the first full draft is written:
+
+- read [references/humanizer.md](./references/humanizer.md)
+- rewrite the article so it sounds human, specific, and lived-in
+- remove AI-sounding abstractions, promo language, vague attributions, and formulaic rhythm
+- keep the meaning and depth intact
+
+Then mark:
+
+- `article.humanizer.required = true`
+- `article.humanizer.status = "done"`
+- `article.humanizer.appliedAt = <ISO timestamp>`
+- add notes in `article.humanizer.notes` if useful
+
+Do not skip this step.
+
+### 6. Validate the draft
 
 ```bash
 node scripts/validate-draft.mjs --draft jobs/<job-id>/draft.json
 ```
 
-If validation fails, fix the draft before continuing.
+Validation requires:
 
-### 4. Generate images when requested
+- research is present
+- outline exists
+- image plan exists
+- article has at least 2 images
+- image blocks reference valid image keys
+- humanizer status is `done`
 
-If the user wants actual images, call:
+### 7. Generate images
+
+Normal end-user flow:
 
 ```bash
 node scripts/generate-images.mjs --draft jobs/<job-id>/draft.json
@@ -185,168 +149,60 @@ node scripts/generate-images.mjs --draft jobs/<job-id>/draft.json
 
 Default behavior:
 
-- use the managed relay gateway image endpoint by default
-- do not require the end user to configure `huoshan_API_KEY`
-- reuse or auto-create a local user identity token and let the gateway handle billing + HuoShan API keys server-side
-- default image model remains `doubao-seedream-5-0-260128` unless overridden
+- use the managed relay gateway by default
+- do not require the user to configure a provider API key
+- let the gateway own billing and provider credentials
 
-Direct provider mode is only for developer debugging, not normal end-user flow:
+Direct provider mode is only for developer debugging:
 
 ```bash
 node scripts/generate-images.mjs --draft jobs/<job-id>/draft.json --direct --env-file /path/to/.env
 ```
 
-If the default model fails because it was retired, discover current image models first:
-
-```bash
-node scripts/list-volc-image-models.mjs --env-file /path/to/.env
-```
-
-Then retry in direct mode with:
-
-```bash
-node scripts/generate-images.mjs --draft jobs/<job-id>/draft.json --direct --env-file /path/to/.env --model <model-id>
-```
-
-### 5. Render the HTML review page
+### 8. Render the review package
 
 ```bash
 node scripts/render-review.mjs --draft jobs/<job-id>/draft.json --out jobs/<job-id>/review.single.html
 ```
 
-The HTML page is what should be sent to the human for review.
-It should be self-contained when possible, with generated images embedded directly into the page.
+This writes:
 
-The page must include:
+- `review.single.html`
+- `artifacts.json`
 
-- three platform article cards
-- generated images placed inside the article at their intended positions
-- title, publish time, goal
-- article block flow
-- image prompts
-- pending approval status
+The HTML page should show:
 
-Always use the fresh job id returned by `scripts/init-job.mjs`.
-Do not reuse hard-coded filenames or static ids like `20260313-content-pipeline-real`.
+- user brief
+- research summary and source list
+- article structure
+- image plan
+- final article with embedded images
+- humanizer status
 
-### 6. Emit the runtime handoff artifacts
+### 9. Stop after artifacts
 
-After rendering succeeds, the review package handoff is:
+Do not send attachments yourself.
+Do not call chat delivery tools.
+Do not inspect history to guess where to send the file.
 
-- `jobs/<job-id>/review.single.html`
-- `jobs/<job-id>/artifacts.json`
-
-`scripts/render-review.mjs` writes both files.
-
-The runtime should parse `artifacts.json` and send the attachment back to the current request conversation.
-
-Expected manifest shape:
-
-```json
-{
-  "schemaVersion": 1,
-  "jobId": "20260314-140334-demo",
-  "theme": "示例主题",
-  "generatedAt": "2026-03-14T06:20:00.000Z",
-  "delivery": {
-    "owner": "runtime",
-    "mode": "current_request_only"
-  },
-  "artifacts": [
-    {
-      "id": "review_html",
-      "kind": "html_review",
-      "role": "review",
-      "path": "/abs/path/jobs/<job-id>/review.single.html",
-      "filename": "review.single.html",
-      "mimeType": "text/html",
-      "caption": "审核状态：pending",
-      "selfContained": true,
-      "embeddedImageCount": 3,
-      "fileSizeBytes": 123456
-    }
-  ]
-}
-```
-
-The final text reply should stay short, for example:
-
-```text
-审核包已生成，等待宿主发送审核页附件。
-```
-
-### 7. Stop and wait for approval
-
-Do not publish yet.
-
-Only after the human explicitly approves, update approval state:
-
-```bash
-node scripts/update-approval.mjs --draft jobs/<job-id>/draft.json --status approved --by "老板"
-```
-
-If the human rejects or asks for edits:
-
-```bash
-node scripts/update-approval.mjs --draft jobs/<job-id>/draft.json --status rejected --note "按意见重写"
-```
-
-## Review-First Policy
-
-Before approval, you may:
-
-- plan topics
-- write drafts
-- generate image prompts
-- generate actual images
-- assemble review HTML
-
-Before approval, you must not:
-
-- publish to Toutiao
-- publish to Xiaohongshu
-- post to X
-
-## Platform Rules
-
-### Toutiao
-
-- prioritize click-through titles
-- prefer information density and trend interpretation
-- optimize for read depth and recommendation traffic
-- prefer a strong lead paragraph, one key image near the opening, then clear section blocks
-
-### Xiaohongshu
-
-- write like a real note, not a newsroom article
-- prefer practical lists, experience, and "I tested this" framing
-- optimize for saves and comments
-- images should feel lifestyle-oriented and should sit naturally between sections instead of only at the top
-
-### X
-
-- write shorter, sharper, and more opinionated
-- only include the standalone post draft for review
-- do not include reply drafts in this skill
-- image placement should support the single post mood, not turn into a long-article layout
+The runtime must consume `artifacts.json` and deliver the HTML attachment back to the current request conversation only.
 
 ## Files
 
-- `scripts/init-job.mjs`: create a new job scaffold
-- `scripts/validate-draft.mjs`: enforce required fields
+- `scripts/init-job.mjs`: create a fresh single-article job scaffold
+- `scripts/validate-draft.mjs`: validate research, plan, article, image, and humanizer requirements
 - `scripts/list-volc-image-models.mjs`: list available HuoShan image models
-- `scripts/generate-images.mjs`: call Seedream and save images locally
-- `scripts/query-gateway-balance.mjs`: query current user's gateway billing status and payment link
-- `scripts/render-review.mjs`: build the self-contained single-file HTML review page and emit `artifacts.json`
-- `scripts/deliver-review.mjs`: manual developer-only delivery helper; not part of the public skill contract
+- `scripts/generate-images.mjs`: generate article images through gateway or direct provider mode
+- `scripts/query-gateway-balance.mjs`: inspect relay billing state
+- `scripts/render-review.mjs`: build `review.single.html` and emit `artifacts.json`
+- `scripts/update-humanizer.mjs`: mark the bundled humanizer pass as pending or done
 - `scripts/update-approval.mjs`: update approval state
+- `scripts/deliver-review.mjs`: manual developer-only helper, not part of the public skill contract
 
-## Operational Notes
+## Final Reply Pattern
 
-- Keep job folders under `./jobs/`
-- Prefer one job per campaign or one job per daily content batch
-- If the user asks to publish immediately, still present the HTML review page first. Urgency is not approval.
-- If publisher skills exist later, use this skill first and hand off only after approval
+After rendering succeeds, keep the text reply short, for example:
 
-
-
+```text
+审核包已生成，等待宿主按当前请求上下文发送 HTML 附件。
+```
