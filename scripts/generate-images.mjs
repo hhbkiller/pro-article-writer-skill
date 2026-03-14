@@ -94,45 +94,43 @@ async function generateImagesViaGateway() {
     explicitApiKey: args["gateway-api-key"],
     stateDir: args["state-dir"]
   });
-  const items = [];
-
   for (const [imageIndex, imageSpec] of (draft.article?.images || []).entries()) {
-    items.push({
-      article_image_index: imageIndex,
-      key: imageSpec.key,
-      prompt: imageSpec.prompt,
-      size: args.size || null
+    const result = await fetchJson(`${gatewayBaseUrl}/relay/images/generations`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${identity.apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        job_id: draft.jobId || null,
+        theme: draft.theme || null,
+        model,
+        size: args.size || null,
+        items: [
+          {
+            article_image_index: imageIndex,
+            key: imageSpec.key,
+            prompt: imageSpec.prompt,
+            size: args.size || null
+          }
+        ]
+      })
     });
-  }
 
-  const result = await fetchJson(`${gatewayBaseUrl}/relay/images/generations`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${identity.apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      job_id: draft.jobId || null,
-      theme: draft.theme || null,
-      model,
-      size: args.size || null,
-      items
-    })
-  });
+    if (!Array.isArray(result.items) || result.items.length !== 1) {
+      throw new Error("Gateway image generation returned incomplete results.");
+    }
 
-  if (!Array.isArray(result.items) || result.items.length !== items.length) {
-    throw new Error("Gateway image generation returned incomplete results.");
-  }
-
-  for (const item of result.items) {
-    const imageSpec = draft.article?.images?.[item.article_image_index];
-    if (!imageSpec || !item.url) {
+    const item = result.items[0];
+    const itemIndex = typeof item.article_image_index === "number" ? item.article_image_index : imageIndex;
+    const targetImageSpec = draft.article?.images?.[itemIndex];
+    if (!targetImageSpec || !item.url) {
       throw new Error("Gateway image generation returned invalid item mapping.");
     }
 
     await downloadAndAttachImage({
-      imageIndex: item.article_image_index,
-      imageSpec,
+      imageIndex: itemIndex,
+      imageSpec: targetImageSpec,
       imageUrl: item.url,
       imageModel: item.model || result.model || model,
       imageSize: item.size || args.size || null
