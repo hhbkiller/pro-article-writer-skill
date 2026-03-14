@@ -1,9 +1,9 @@
 ---
-name: social-content-pipeline
+name: pro-article-writer
 description: Research-first professional illustrated article writer that turns a user's topic, direction, and rough idea into one deep, detailed, human-sounding article with at least two generated images and a review-first HTML package. Use when the user asks for 生成图文, 图文内容, 配图文章, 写一篇软文, 写软文, 深度推文, or wants one high-quality article instead of multi-platform variants.
 ---
 
-# Social Content Pipeline
+# Pro Article Writer
 
 Write one strong illustrated article.
 

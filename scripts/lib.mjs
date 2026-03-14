@@ -300,7 +300,8 @@ function generateShortUserId() {
 export function resolveGatewayIdentity({
   explicitApiKey,
   stateDir = resolveStateDir(),
-  identityFileName = "social-content-pipeline-identity.json",
+  identityFileName = "pro-article-writer-identity.json",
+  legacyIdentityFileName = "social-content-pipeline-identity.json",
   fallbackRelayIdentityFileName = "openclaw-relay-switch-identity.json"
 } = {}) {
   if (explicitApiKey) {
@@ -310,10 +311,16 @@ export function resolveGatewayIdentity({
   }
 
   const primaryPath = path.join(stateDir, identityFileName);
+  const legacyPath = path.join(stateDir, legacyIdentityFileName);
   const fallbackPath = path.join(stateDir, fallbackRelayIdentityFileName);
   const fromPrimary = loadIdentityFile(primaryPath);
   if (fromPrimary) {
     return { ...fromPrimary, source: "local" };
+  }
+  const fromLegacy = loadIdentityFile(legacyPath);
+  if (fromLegacy) {
+    saveIdentityFile(primaryPath, fromLegacy.userId, fromLegacy.apiKey);
+    return { ...fromLegacy, source: "legacy-local" };
   }
   const fromFallback = loadIdentityFile(fallbackPath);
   if (fromFallback) {
