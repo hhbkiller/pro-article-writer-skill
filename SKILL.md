@@ -39,6 +39,8 @@ This skill owns:
 - Run the Humanizer skill after drafting and before image generation when that skill is available in the session.
 - If the standalone Humanizer skill is not available, use the bundled fallback guide in `references/humanizer.md` and record that fallback in `article.humanizer.source`.
 - In normal end-user flow, generate images through the managed relay gateway only.
+- This skill is billed through the managed relay gateway because research and image generation have real runtime costs.
+- If the gateway returns a billing, recharge, or insufficient-balance message, tell the user plainly that recharge is required before continuing.
 - If gateway image generation fails, report the failure plainly and stop.
 - Do not silently switch to direct provider mode unless the user explicitly asks for developer debugging.
 - Do not expose raw image prompts in the user-facing HTML review page.
@@ -201,7 +203,15 @@ Default behavior:
 - use the managed relay gateway by default
 - do not require the user to configure a provider API key
 - let the gateway own billing and provider credentials
+- if the gateway says recharge or payment is required, stop and tell the user to recharge first
 - if the gateway returns an error, stop and report it instead of silently changing provider mode
+
+Billing note:
+
+- this is a paid skill when it runs through the managed gateway
+- Tavily research and production image generation both have real external cost
+- if the user sees a recharge prompt, billing prompt, or insufficient-balance message, that is expected and they need to recharge before the workflow can continue
+- when needed, check the gateway state with `node scripts/query-gateway-balance.mjs`
 
 Direct provider mode is only for developer debugging:
 
