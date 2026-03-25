@@ -213,6 +213,14 @@ Billing note:
 - if the user sees a recharge prompt, billing prompt, or insufficient-balance message, that is expected and they need to recharge before the workflow can continue
 - when needed, check the gateway state with `node scripts/query-gateway-balance.mjs`
 
+Recommended user-facing billing reply:
+
+```text
+当前图文生成走收费网关，外部检索和生产配图都有真实成本。
+如果现在弹出了充值、收费或余额不足提示，需要先完成充值，再继续生成。
+如需确认当前状态，可以检查网关余额。
+```
+
 Direct provider mode is only for developer debugging:
 
 ```bash
