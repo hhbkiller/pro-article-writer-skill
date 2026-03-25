@@ -2,6 +2,16 @@
 
 一个给 OpenClaw / Codex 用的写文章 skill。
 
+## 效果预览
+
+### 1. 在对话里直接产出审核页和发布包
+
+![对话输出示例](./assets/screenshots/demo-chat-output.png)
+
+### 2. 生成可直接审核的图文页面
+
+![审核页示例](./assets/screenshots/demo-review-page.png)
+
 它不是简单地“生成一段文案”，而是按完整流程产出一篇可发布的图文：
 
 - 先用 Tavily 搜资料
