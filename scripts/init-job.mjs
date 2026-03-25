@@ -39,6 +39,7 @@ const draft = {
     },
     searchQueries: [],
     sources: [],
+    exemplars: [],
     findings: []
   },
   plan: {
@@ -52,10 +53,12 @@ const draft = {
     title: "",
     subtitle: "",
     summary: "",
+    bannerImageKey: "",
     blocks: [],
     images: [],
     humanizer: {
       required: true,
+      preferredSkill: "humanizer",
       source: "bundled-humanizer",
       status: "pending",
       appliedAt: null,

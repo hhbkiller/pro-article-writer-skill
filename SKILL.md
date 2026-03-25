@@ -1,6 +1,6 @@
 ---
 name: pro-article-writer
-description: Research-first professional illustrated article writer that turns a user's topic, direction, and rough idea into one deep, detailed, human-sounding article with a 5:2 title banner, at least two inline generated images, an HTML review page, and a publishable ZIP package. Search for current sources and similar high-quality articles first, especially strong or high-engagement exemplars, then write by reference instead of inventing from scratch. Use the Humanizer skill when available for the anti-AI-text rewrite pass; otherwise fall back to the bundled humanizer guide. Use when the user asks for 生成图文, 图文内容, 配图文章, 写一篇软文, 写软文, 深度推文, or wants one high-quality article instead of multi-platform variants.
+description: Research-first professional illustrated article writer that turns a user's topic, direction, and rough idea into one deep, detailed, human-sounding article with a 5:2 title banner, at least two inline generated images, an HTML review page, and a publishable ZIP package. Search with Tavily for current sources and similar high-quality articles first, especially strong or high-engagement exemplars, then write by reference instead of inventing from scratch. Use the Humanizer skill when available for the anti-AI-text rewrite pass; otherwise fall back to the bundled humanizer guide. Use when the user asks for 生成图文, 图文内容, 配图文章, 写一篇软文, 写软文, 深度推文, or wants one high-quality article instead of multi-platform variants.
 ---
 
 # Pro Article Writer
@@ -26,7 +26,7 @@ This skill owns:
 ## Hard Rules
 
 - Start from the user's topic, direction, and brief idea.
-- Search for relevant articles, current information, and useful source material before outlining.
+- Search with Tavily for relevant articles, current information, and useful source material before outlining.
 - Search for similar published articles before drafting. Prefer strong, high-engagement, or otherwise proven exemplars when they exist.
 - Record the sources inside the draft.
 - Record at least 1 exemplar article in `research.exemplars` and explain why it is worth referencing.
@@ -79,18 +79,28 @@ This creates:
 Before writing:
 
 - capture the user's topic, direction, and brief in `research.userIntent`
-- search the web for relevant articles, reports, posts, and primary material
+- search the web with Tavily for relevant articles, reports, posts, and primary material
 - search for similar high-quality or high-engagement articles that can serve as exemplars
 - prefer recent or primary sources when the topic is time-sensitive
 - record exact URLs, dates, and what each source contributes
 - record why each exemplar is worth referencing and what to borrow from it
 - summarize findings into concrete takeaways instead of vague impressions
 
-Seed the exemplar search with:
+Seed the research step with Tavily-first search:
 
 ```bash
 node scripts/discover-references.mjs --draft jobs/<job-id>/draft.json
 ```
+
+`scripts/discover-references.mjs` now uses Tavily first when `TAVILY_API_KEY` is available, or when you pass `--api-key` / `--env-file`.
+It writes back:
+
+- `research.searchQueries`
+- `research.sources`
+- `research.findings`
+- `research.exemplars`
+
+If Tavily is not configured or fails, the script falls back to Bing so the pipeline can still continue.
 
 Minimum research bar:
 
@@ -272,7 +282,7 @@ If either attachment fails to send, say so directly and stop.
 
 - `scripts/init-job.mjs`: create a fresh single-article job scaffold
 - `scripts/validate-draft.mjs`: validate research, plan, article, image, and humanizer requirements
-- `scripts/discover-references.mjs`: search the web and seed `research.exemplars` with likely strong reference articles
+- `scripts/discover-references.mjs`: run Tavily-first web research, fill `research.sources` and `research.findings`, and seed `research.exemplars` with likely strong reference articles
 - `scripts/list-volc-image-models.mjs`: list available HuoShan image models
 - `scripts/generate-images.mjs`: generate article images through gateway or direct provider mode
 - `scripts/query-gateway-balance.mjs`: inspect relay billing state

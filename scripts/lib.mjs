@@ -96,6 +96,11 @@ function normalizeResearch(research, draft) {
   };
   next.searchQueries = Array.isArray(next.searchQueries) ? [...next.searchQueries] : [];
   next.sources = Array.isArray(next.sources) ? next.sources.map((source) => ({ ...source })) : [];
+  next.exemplars = Array.isArray(next.exemplars) ? next.exemplars.map((item) => ({
+    ...item,
+    takeaways: Array.isArray(item?.takeaways) ? [...item.takeaways] : [],
+    qualitySignals: Array.isArray(item?.qualitySignals) ? [...item.qualitySignals] : []
+  })) : [];
   next.findings = Array.isArray(next.findings) ? [...next.findings] : [];
   return next;
 }
@@ -128,10 +133,12 @@ function normalizeArticle(article, draft, legacyPost) {
   next.title = next.title || base.title || "";
   next.subtitle = next.subtitle || "";
   next.summary = next.summary || "";
+  next.bannerImageKey = next.bannerImageKey || "";
   next.images = Array.isArray(next.images) ? next.images.map((image) => ({ ...image })) : [];
   next.blocks = Array.isArray(next.blocks) ? next.blocks.map((block) => normalizeBlock(block)) : [];
   next.humanizer = {
     required: next.humanizer?.required !== false,
+    preferredSkill: next.humanizer?.preferredSkill || "humanizer",
     source: next.humanizer?.source || "bundled-humanizer",
     status: next.humanizer?.status || "pending",
     appliedAt: next.humanizer?.appliedAt || null,
@@ -478,4 +485,39 @@ export function inferAgentId({ cwd = process.cwd(), fallback = "main" } = {}) {
     return base.slice("workspace-".length) || fallback;
   }
   return fallback;
+}
+
+export function normalizeArtifactManifest(manifest, { draft, generatedAt = null } = {}) {
+  const next = manifest && typeof manifest === "object" ? { ...manifest } : {};
+  next.schemaVersion = 1;
+  next.jobId = next.jobId || draft?.jobId || "";
+  next.theme = next.theme || draft?.theme || "";
+  next.generatedAt = generatedAt ?? next.generatedAt ?? null;
+  next.delivery = {
+    owner: "runtime",
+    mode: "current_request_only",
+    ...(next.delivery && typeof next.delivery === "object" ? next.delivery : {})
+  };
+  next.artifacts = Array.isArray(next.artifacts) ? next.artifacts.map((artifact) => ({ ...artifact })) : [];
+  return next;
+}
+
+export function upsertArtifact(manifest, artifact) {
+  const next = normalizeArtifactManifest(manifest);
+  const key = artifact?.id || artifact?.path || `${artifact?.kind || "artifact"}:${artifact?.filename || ""}`;
+  const index = next.artifacts.findIndex((item) => {
+    const itemKey = item?.id || item?.path || `${item?.kind || "artifact"}:${item?.filename || ""}`;
+    return itemKey === key;
+  });
+
+  if (index >= 0) {
+    next.artifacts[index] = {
+      ...next.artifacts[index],
+      ...artifact
+    };
+  } else {
+    next.artifacts.push({ ...artifact });
+  }
+
+  return next;
 }

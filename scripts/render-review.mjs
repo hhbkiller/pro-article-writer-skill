@@ -2,7 +2,17 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { imagePathToDataUri, normalizeDraft, parseArgs, readJson, resolveDraftPath, writeJson, writeText } from "./lib.mjs";
+import {
+  imagePathToDataUri,
+  normalizeArtifactManifest,
+  normalizeDraft,
+  parseArgs,
+  readJson,
+  resolveDraftPath,
+  upsertArtifact,
+  writeJson,
+  writeText
+} from "./lib.mjs";
 
 const args = parseArgs(process.argv.slice(2));
 const draftPath = resolveDraftPath(args.draft);
@@ -14,8 +24,8 @@ const article = draft.article || {};
 const embeddedImageCount = (article.images || []).filter((image) => image.localImage).length;
 const selfContained = true;
 
-if (embeddedImageCount < 2) {
-  throw new Error("At least 2 generated images are required before rendering review.single.html.");
+if (embeddedImageCount < 3) {
+  throw new Error("A banner plus at least 2 inline generated images are required before rendering review.single.html.");
 }
 
 const notesHtml = Array.isArray(draft.notes) && draft.notes.length > 0
@@ -49,7 +59,7 @@ const html = `<!doctype html>
         linear-gradient(180deg, #f7f1e8 0%, #efe5d7 100%);
     }
     .page {
-      width: min(1200px, calc(100vw - 32px));
+      width: min(1400px, calc(100vw - 24px));
       margin: 24px auto 48px;
     }
     .hero {
@@ -181,8 +191,57 @@ const html = `<!doctype html>
       display: block;
       width: 100%;
       border-radius: 18px;
-      object-fit: cover;
+      object-fit: contain;
       background: linear-gradient(135deg, rgba(214,96,43,0.15), rgba(20,95,99,0.16));
+    }
+    .banner-figure {
+      margin: 0 0 22px;
+      display: block;
+    }
+    .banner-stage {
+      position: relative;
+      overflow: hidden;
+      border-radius: 22px;
+      border: 1px solid var(--line);
+      background: #efe7da;
+    }
+    .banner-stage::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(180deg, rgba(19,16,14,0.12) 0%, rgba(19,16,14,0.55) 100%);
+      pointer-events: none;
+    }
+    .banner-stage img {
+      display: block;
+      width: 100%;
+      aspect-ratio: 5 / 2;
+      object-fit: contain;
+      object-position: center;
+      border-radius: 0;
+      background: linear-gradient(135deg, rgba(214,96,43,0.10), rgba(20,95,99,0.14));
+    }
+    .banner-copy {
+      position: absolute;
+      inset: auto 0 0 0;
+      z-index: 1;
+      padding: clamp(16px, 2.2vw, 30px);
+      color: #fff7f0;
+    }
+    .banner-copy h3 {
+      margin: 0;
+      font-size: clamp(22px, 3.4vw, 38px);
+      line-height: 1.12;
+      color: inherit;
+      text-shadow: 0 4px 18px rgba(0,0,0,0.26);
+    }
+    .banner-copy p {
+      margin: 10px 0 0;
+      max-width: 70ch;
+      font-size: clamp(13px, 1.5vw, 16px);
+      line-height: 1.6;
+      color: rgba(255,247,240,0.92);
+      text-shadow: 0 2px 10px rgba(0,0,0,0.22);
     }
     .img-missing {
       display: grid;
@@ -213,9 +272,10 @@ const html = `<!doctype html>
       line-height: 1.8;
     }
     @media (max-width: 980px) {
-      .page { width: min(100vw - 20px, 1200px); }
+    .page { width: min(100vw - 20px, 1200px); }
       .hero { padding: 22px; }
       .grid { grid-template-columns: 1fr; }
+      .banner-copy p { max-width: none; }
     }
   </style>
 </head>
@@ -229,6 +289,7 @@ const html = `<!doctype html>
         <span class="chip">当前状态: ${escapeHtml(draft.status || "draft")}</span>
         <span class="chip">审核状态: ${escapeHtml(draft.approval?.status || "pending")}</span>
         <span class="chip">Humanizer: ${escapeHtml(article.humanizer?.status || "pending")}</span>
+        <span class="chip">Banner: ${escapeHtml(article.bannerImageKey || "未设置")}</span>
         <span class="chip">已规划配图: ${escapeHtml(String((article.images || []).length))}</span>
       </div>
       <div class="rules">
@@ -267,6 +328,13 @@ const html = `<!doctype html>
       </article>
       <article class="card">
         <div class="body">
+          <span class="kicker">对标范文</span>
+          <h2>优先参考高质量已发布文章</h2>
+          <div class="source-list">${renderExemplars(draft.research?.exemplars || [])}</div>
+        </div>
+      </article>
+      <article class="card">
+        <div class="body">
           <span class="kicker">文章结构</span>
           <h2>段落与叙事安排</h2>
           <div class="plan-list">${renderSections(draft.plan?.sections || [])}</div>
@@ -275,7 +343,7 @@ const html = `<!doctype html>
       <article class="card">
         <div class="body">
           <span class="kicker">配图规划</span>
-          <h2>至少两幅图，服务正文推进</h2>
+          <h2>1 张标题横幅 + 至少 2 张文内配图</h2>
           <div class="plan-list">${renderImagePlan(draft.plan?.imagePlan || [], article.images || [])}</div>
         </div>
       </article>
@@ -300,30 +368,27 @@ console.log(JSON.stringify({
 
 function buildArtifactManifest() {
   const stat = fs.statSync(outPath);
-  return {
-    schemaVersion: 1,
-    jobId: draft.jobId || "",
-    theme: draft.theme || "",
-    generatedAt: new Date().toISOString(),
-    delivery: {
-      owner: "runtime",
-      mode: "current_request_only"
-    },
-    artifacts: [
-      {
-        id: "review_html",
-        kind: "html_review",
-        role: "review",
-        path: outPath,
-        filename: path.basename(outPath),
-        mimeType: "text/html",
-        caption: `审核状态：${draft.approval?.status || "pending approval"}`,
-        selfContained,
-        embeddedImageCount,
-        fileSizeBytes: stat.size
-      }
-    ]
-  };
+  let manifest = normalizeArtifactManifest(
+    fs.existsSync(artifactManifestPath) ? readJson(artifactManifestPath) : null,
+    {
+      draft,
+      generatedAt: new Date().toISOString()
+    }
+  );
+  manifest.generatedAt = new Date().toISOString();
+  manifest = upsertArtifact(manifest, {
+    id: "review_html",
+    kind: "html_review",
+    role: "review",
+    path: outPath,
+    filename: path.basename(outPath),
+    mimeType: "text/html",
+    caption: `审核状态：${draft.approval?.status || "pending approval"}`,
+    selfContained,
+    embeddedImageCount,
+    fileSizeBytes: stat.size
+  });
+  return manifest;
 }
 
 function renderSources(sources) {
@@ -335,6 +400,23 @@ function renderSources(sources) {
     <div class="muted">${escapeHtml(source.publishedAt || "日期未记录")}</div>
     <div class="muted">${escapeHtml(source.note || "")}</div>
     ${source.url ? `<div class="muted"><a href="${escapeAttr(source.url)}" target="_blank" rel="noreferrer">${escapeHtml(source.url)}</a></div>` : ""}
+  </div>`).join("\n");
+}
+
+function renderExemplars(exemplars) {
+  if (exemplars.length === 0) {
+    return `<div class="source-item">暂无对标范文</div>`;
+  }
+  return exemplars.map((item) => `<div class="source-item">
+    <div><strong>${escapeHtml(item.title || "")}</strong></div>
+    <div class="muted">平台：${escapeHtml(item.platform || "未记录")}</div>
+    <div class="muted">${escapeHtml(item.publishedAt || "日期未记录")}</div>
+    <div class="muted">质量信号：${escapeHtml(item.engagementEvidence || "未记录")}</div>
+    <div class="muted">参照理由：${escapeHtml(item.reason || "")}</div>
+    ${Array.isArray(item.takeaways) && item.takeaways.length > 0
+      ? `<ul>${item.takeaways.map((takeaway) => `<li>${escapeHtml(takeaway)}</li>`).join("")}</ul>`
+      : ""}
+    ${item.url ? `<div class="muted"><a href="${escapeAttr(item.url)}" target="_blank" rel="noreferrer">${escapeHtml(item.url)}</a></div>` : ""}
   </div>`).join("\n");
 }
 
@@ -361,7 +443,10 @@ function renderImagePlan(imagePlan, images) {
     return `<div class="plan-item">
       <div><strong>${index + 1}. ${escapeHtml(image.key || "")}</strong></div>
       <div class="muted">位置：${escapeHtml(item.placement || image.placement || "正文中")}</div>
+      ${(item.size || image.size) ? `<div class="muted">尺寸：${escapeHtml(item.size || image.size)}</div>` : ""}
       <div class="muted">目的：${escapeHtml(item.purpose || image.purpose || "")}</div>
+      ${(item.relatedSectionHeading || image.relatedSectionHeading) ? `<div class="muted">关联段落：${escapeHtml(item.relatedSectionHeading || image.relatedSectionHeading)}</div>` : ""}
+      ${(item.scene || image.scene) ? `<div class="muted">使用场景：${escapeHtml(item.scene || image.scene)}</div>` : ""}
       <div class="muted">图注：${escapeHtml(image.caption || item.caption || "未填写")}</div>
     </div>`;
   }).join("\n");
@@ -375,12 +460,36 @@ function renderArticle(article, draftDir) {
       <div class="post-meta">
         <span>副标题：${escapeHtml(article.subtitle || "无")}</span>
         <span>摘要：${escapeHtml(article.summary || "")}</span>
+        <span>标题横幅：${escapeHtml(article.bannerImageKey || "未设置")}</span>
         <span>Humanizer 来源：${escapeHtml(article.humanizer?.source || "bundled-humanizer")}</span>
         ${article.images?.[0]?.imageModel ? `<span>配图模型：${escapeHtml(article.images[0].imageModel)}</span>` : ""}
       </div>
+      ${renderBanner(article, draftDir)}
       <div class="article-flow">${renderBlocks(article, draftDir)}</div>
     </div>
   </article>`;
+}
+
+function renderBanner(article, draftDir) {
+  if (!article.bannerImageKey) {
+    return "";
+  }
+  const image = (article.images || []).find((item) => item.key === article.bannerImageKey);
+  if (!image?.localImage) {
+    throw new Error(`Missing generated banner image for key '${article.bannerImageKey}'.`);
+  }
+  const dataUri = imagePathToDataUri(path.resolve(draftDir, image.localImage));
+  const subtitle = article.subtitle || article.summary || "";
+  return `<figure class="banner-figure">
+    <div class="banner-stage">
+      <img src="${escapeAttr(dataUri)}" alt="${escapeAttr(image.alt || article.title || "banner image")}">
+      <div class="banner-copy">
+        <h3>${escapeHtml(article.title || "")}</h3>
+        ${subtitle ? `<p>${escapeHtml(subtitle)}</p>` : ""}
+      </div>
+    </div>
+    ${image.caption ? `<figcaption>${escapeHtml(image.caption)}</figcaption>` : ""}
+  </figure>`;
 }
 
 function renderBlocks(article, draftDir) {
@@ -399,6 +508,9 @@ function renderBlocks(article, draftDir) {
       return `<ul>${(block.items || []).map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`;
     }
     if (block.type === "image") {
+      if (article.bannerImageKey && block.imageKey === article.bannerImageKey) {
+        return "";
+      }
       const image = imageMap.get(block.imageKey);
       if (!image?.localImage) {
         throw new Error(`Missing generated image for block key '${block.imageKey || ""}'.`);

@@ -18,6 +18,7 @@ const notes = args.note
 draft.article.humanizer = {
   ...(draft.article?.humanizer || {}),
   required: true,
+  preferredSkill: args["preferred-skill"] || draft.article?.humanizer?.preferredSkill || "humanizer",
   source: args.source || draft.article?.humanizer?.source || "bundled-humanizer",
   status,
   appliedAt: status === "done" ? new Date().toISOString() : null,

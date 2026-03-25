@@ -1,7 +1,7 @@
 interface:
   display_name: "Professional Article Writer"
-  short_description: "调研优先、单篇深写、humanizer 人类化、至少两图、输出 HTML 审核页"
-  default_prompt: "Use $pro-article-writer to turn the user's topic, direction, and rough idea into one deeply researched, humanized illustrated article. Search first, record sources and an outline, plan at least 2 images, write the article, apply the bundled humanizer pass, generate images, then emit review.single.html plus artifacts.json for runtime delivery."
+  short_description: "先搜资料和对标范文，Humanizer 去 AI 痕迹，输出 HTML 审核页和 ZIP 发布包"
+  default_prompt: "Use $pro-article-writer to turn the user's topic, direction, and rough idea into one deeply researched, humanized illustrated article. Search with Tavily first, record sources, findings, and similar high-quality exemplar articles, borrow their angle or structure without copying, create one 5:2 clean banner background plus at least two inline images tied to real article sections or usage scenes, write the article, run the Humanizer skill when available or the bundled fallback otherwise, generate images with no visible text, no QR codes, and no political/public-figure imagery, render review.single.html with HTML title overlay on the banner, export publish-package.zip, then send both attachments back to the current chat with scripts/deliver-review.mjs."
 
 policy:
   allow_implicit_invocation: true
